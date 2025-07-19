@@ -3,289 +3,186 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { populateFormFromImage } from '@/ai/flows/populate-form-from-image';
-
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
-import { CalendarIcon, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react';
-import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { expenseSchema, type Expense, type ExpenseWithId } from '@/lib/types';
+import { Textarea } from '@/components/ui/textarea';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { X } from 'lucide-react';
 
 interface ExpenseFormProps {
   addRecord: (record: ExpenseWithId) => void;
 }
 
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = error => reject(error);
+  });
+};
+
 export function ExpenseForm({ addRecord }: ExpenseFormProps) {
   const { toast } = useToast();
-  const [isScanning, setIsScanning] = React.useState(false);
-  const [imagePreview, setImagePreview] = React.useState<string | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-
+  const [isReviewing, setIsReviewing] = React.useState(false);
+  
   const form = useForm<Expense>({
     resolver: zodResolver(expenseSchema),
     defaultValues: {
-      vendor: '',
-      amount: '' as unknown as number, // Use empty string for initial state
-      category: 'Food',
-      isBusinessExpense: true,
-      notes: '',
-      otherCategory: '',
+      groupName: '',
+      bankType: '',
+      bankAccountNumber: '',
+      name: '',
+      phoneNumber: '',
+      collectedAmount: 0,
+      buyingRate: 0,
+      totalMmkTransferAmount: 0,
+      remark: '',
+      uploadedFiles: [],
     },
   });
 
-  const watchedCategory = form.watch('category');
+  const { watch, setValue, getValues } = form;
+  const watchedRmCollectedAmount = watch('collectedAmount');
+  const watchedRmBuyingRate = watch('buyingRate');
+  const uploadedFiles = watch('uploadedFiles');
 
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+  React.useEffect(() => {
+    const total = (watchedRmCollectedAmount || 0) * (watchedRmBuyingRate || 0);
+    setValue('totalMmkTransferAmount', total);
+  }, [watchedRmCollectedAmount, watchedRmBuyingRate, setValue]);
+
+  const handleRemoveImage = (index: number) => {
+    const currentFiles = getValues('uploadedFiles') || [];
+    const newFiles = currentFiles.filter((_, i) => i !== index);
+    setValue('uploadedFiles', newFiles, { shouldValidate: true });
   };
 
-  const handleScanImage = async () => {
-    if (!imagePreview) {
-      toast({
-        title: 'No Image Selected',
-        description: 'Please select an image file to scan.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    setIsScanning(true);
-    try {
-      // A simplified representation of the schema for the AI
-      const formSchemaForAI = {
-        vendor: "string",
-        transactionDate: "date (YYYY-MM-DD)",
-        amount: "number",
-        category: "enum ('Food', 'Travel', 'Office Supplies', 'Other')",
-      };
-
-      const result = await populateFormFromImage({
-        photoDataUri: imagePreview,
-        formSchema: JSON.stringify(formSchemaForAI),
-      });
-
-      if (result.vendor) form.setValue('vendor', String(result.vendor), { shouldValidate: true });
-      if (result.amount) form.setValue('amount', Number(result.amount), { shouldValidate: true });
-      if (result.transactionDate) {
-        const parsedDate = new Date(result.transactionDate);
-        if (!isNaN(parsedDate.getTime())) {
-            form.setValue('transactionDate', parsedDate, { shouldValidate: true });
-        }
-      }
-      if (result.category && ['Food', 'Travel', 'Office Supplies', 'Other'].includes(String(result.category))) {
-        form.setValue('category', result.category as 'Food' | 'Travel' | 'Office Supplies' | 'Other', { shouldValidate: true });
-      }
-      toast({
-        title: 'Scan Successful',
-        description: 'Form has been populated with data from the image.',
-      });
-    } catch (error) {
-      console.error('AI Scan Error:', error);
-      toast({
-        title: 'Scan Failed',
-        description: 'Could not extract data. Please fill the form manually.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsScanning(false);
-    }
-  };
-  
-  const onSubmit = (data: Expense) => {
-    const newRecord = { ...data, id: new Date().toISOString() };
+  const onSubmit = async (data: Expense) => {
+    const newRecord: ExpenseWithId = { ...data, id: new Date().toISOString() };
     addRecord(newRecord);
     form.reset();
-    setImagePreview(null);
-    if(fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
     toast({
       title: 'Record Saved!',
       description: 'Your expense has been added and the dashboard is updated.',
     });
+    setIsReviewing(false);
+  };
+
+  const handleReviewSubmit = async () => {
+    const isValid = await form.trigger();
+    if (isValid) {
+      setIsReviewing(true);
+    }
+  };
+
+  const handleCancelReview = () => {
+    setIsReviewing(false);
+  };
+
+  const handleClearForm = () => {
+    form.reset();
   };
 
   return (
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle>Add Expense Record</CardTitle>
-        <CardDescription>Fill out the form below or scan a receipt.</CardDescription>
+        <CardDescription>Fill out the form below.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="mb-6 p-4 border-2 border-dashed rounded-lg text-center bg-muted/20">
-            {imagePreview ? (
-                <div className="relative w-full h-48 mb-4">
-                    <img src={imagePreview} alt="Receipt preview" className="rounded-md object-contain w-full h-full" />
-                </div>
-            ) : (
-                <div className="flex flex-col items-center justify-center h-48">
-                    <ImageIcon className="w-12 h-12 text-muted-foreground mb-2" />
-                    <p className="text-muted-foreground">Upload a receipt for AI scanning</p>
-                </div>
-            )}
-            <div className="flex gap-2 justify-center">
-                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                    {imagePreview ? 'Change Image' : 'Upload Image'}
-                </Button>
-                <Input
-                    type="file"
-                    accept="image/*"
-                    ref={fileInputRef}
-                    onChange={handleImageUpload}
-                    className="hidden"
-                    aria-label="Upload receipt image"
-                />
-                {imagePreview && (
-                    <Button type="button" onClick={handleScanImage} disabled={isScanning} className="bg-primary hover:bg-primary/90">
-                        {isScanning ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Sparkles className="mr-2 h-4 w-4" />
-                        )}
-                        Scan with AI
-                    </Button>
-                )}
-            </div>
-        </div>
-        
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField control={form.control} name="groupName" render={({ field }) => ( <FormItem> <FormLabel>Group Name</FormLabel> <FormControl><Input placeholder="Enter Group Name" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="bankType" render={({ field }) => ( <FormItem> <FormLabel>Bank Type</FormLabel> <FormControl><Input placeholder="Enter Bank Type" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="bankAccountNumber" render={({ field }) => ( <FormItem> <FormLabel>Bank Account Number</FormLabel> <FormControl><Input placeholder="Enter Bank Account Number" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Name</FormLabel> <FormControl><Input placeholder="Enter Name" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="phoneNumber" render={({ field }) => ( <FormItem> <FormLabel>Phone Number</FormLabel> <FormControl><Input placeholder="Enter Phone Number" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="collectedAmount" render={({ field }) => ( <FormItem> <FormLabel>Collected Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="buyingRate" render={({ field }) => ( <FormItem> <FormLabel>Buying Rate</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseFloat(e.target.value) || 0)} /></FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="totalMmkTransferAmount" render={({ field }) => ( <FormItem> <FormLabel>Total MMK Transfer Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} disabled value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="remark" render={({ field }) => ( <FormItem> <FormLabel>Remark</FormLabel> <FormControl><Textarea placeholder="Add any remarks" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
+            
             <FormField
               control={form.control}
-              name="vendor"
+              name="uploadedFiles"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Vendor</FormLabel>
+                  <FormLabel>Receipt Image</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Starbucks" {...field} />
+                    <Input
+                      type="file"
+                      accept="image/png, image/jpeg, image/jpg"
+                      multiple
+                      onChange={async (e) => {
+                        const files = e.target.files;
+                        if (files) {
+                          const fileInfo = await Promise.all(
+                            Array.from(files).map(async (file) => {
+                              const url = await fileToBase64(file);
+                              return { name: file.name, url };
+                            })
+                          );
+                          field.onChange(fileInfo);
+                        }
+                      }}
+                    />
                   </FormControl>
                   <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Amount ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value === undefined ? '' : field.value} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="transactionDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col pt-2">
-                    <FormLabel>Transaction Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={'outline'}
-                            className={cn(
-                              'w-full pl-3 text-left font-normal',
-                              !field.value && 'text-muted-foreground'
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, 'PPP')
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date('2000-01-01')
-                          }
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="Food">Food</SelectItem>
-                      <SelectItem value="Travel">Travel</SelectItem>
-                      <SelectItem value="Office Supplies">Office Supplies</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            {watchedCategory === 'Other' && (
-              <div className="animate-in fade-in-50 duration-500">
-                <FormField
-                  control={form.control}
-                  name="otherCategory"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Specify Other Category</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Software Subscription" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                  {uploadedFiles && uploadedFiles.length > 0 && (
+                    <div className="grid grid-cols-3 gap-4 mt-4">
+                      {uploadedFiles.map((file, index) => (
+                        <div key={index} className="relative">
+                          <img src={file.url} alt={file.name} className="rounded-md object-contain w-full h-full" />
+                          <Button type="button" variant="destructive" size="icon" className="absolute top-1 right-1 h-6 w-6" onClick={() => handleRemoveImage(index)}> <X className="h-4 w-4" /> </Button>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                />
-              </div>
-            )}
+                </FormItem>
+              )}
+            />
             
-            <Button type="submit" className="w-full text-lg py-6" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Record
-            </Button>
+            <div className="flex space-x-4">
+                <AlertDialog open={isReviewing} onOpenChange={setIsReviewing}>
+                    <AlertDialogTrigger asChild>
+                        <Button type="button" className="flex-1 text-lg py-6" onClick={handleReviewSubmit}>Review Info & Submit</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Review Your Submission</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Please check the details carefully before submitting.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="max-h-64 overflow-y-auto pr-4 text-sm">
+                            <div className="space-y-1">
+                                <div><strong>Group Name:</strong> {watch('groupName')}</div>
+                                <div><strong>Bank Type:</strong> {watch('bankType')}</div>
+                                <div><strong>Bank Account No.:</strong> {watch('bankAccountNumber')}</div>
+                                <div><strong>Name:</strong> {watch('name')}</div>
+                                <div><strong>Phone Number:</strong> {watch('phoneNumber')}</div>
+                                <div><strong>Collected Amount:</strong> {watch('collectedAmount')}</div>
+                                <div><strong>Buying Rate:</strong> {watch('buyingRate')}</div>
+                                <div><strong>Total MMK Amount:</strong> {watch('totalMmkTransferAmount')}</div>
+                                {watch('remark') && <div><strong>Remark:</strong> {watch('remark')}</div>}
+                                {uploadedFiles && uploadedFiles.length > 0 && (
+                                    <div><strong>Files:</strong> {uploadedFiles.map(f => f.name).join(', ')}</div>
+                                )}
+                            </div>
+                        </div>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={handleCancelReview}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={form.handleSubmit(onSubmit)}>Submit</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+                <Button type="button" variant="outline" className="flex-1 text-lg py-6" onClick={handleClearForm}>Clear</Button>
+            </div>
           </form>
         </Form>
       </CardContent>

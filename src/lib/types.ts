@@ -1,28 +1,29 @@
 import { z } from 'zod';
 
 export const expenseSchema = z.object({
-  vendor: z.string().min(1, { message: 'Vendor is required.' }),
-  transactionDate: z.date({ required_error: 'Transaction date is required.' }),
-  amount: z.coerce.number().min(0.01, { message: 'Amount must be greater than 0.' }),
-  category: z.enum(['Food', 'Travel', 'Office Supplies', 'Other']),
-  isBusinessExpense: z.boolean().default(true),
-  notes: z.string().optional().default(''),
-  otherCategory: z.string().optional(),
-}).refine(data => {
-  if (data.category === 'Other') {
-    return !!data.otherCategory && data.otherCategory.length > 0;
-  }
-  return true;
-}, {
-  message: 'Please specify the category',
-  path: ['otherCategory'],
+  groupName: z.string().regex(/^[a-zA-Z0-9]+$/, { message: 'Group Name must be alphanumeric.' }),
+  bankType: z.string().regex(/^[a-zA-Z0-9]+$/, { message: 'Bank Type must be alphanumeric.' }),
+  bankAccountNumber: z.string().min(1, { message: 'Bank Account Number is required.' }),
+  name: z.string().min(1, { message: 'Name is required.' }),
+  phoneNumber: z.string().min(1, { message: 'Phone Number is required.' }),
+  collectedAmount: z.coerce.number().min(0, { message: 'Collected Amount must be a non-negative number.' }),
+  buyingRate: z.coerce.number().min(0, { message: 'Buying Rate must be a non-negative number.' }),
+  totalMmkTransferAmount: z.coerce.number().min(0, { message: 'Total MMK Transfer Amount must be a non-negative number.' }),
+  remark: z.string().optional().default(''),
+  // Store file info (name and URL) instead of just the data
+  uploadedFiles: z.array(z.object({
+    name: z.string(),
+    url: z.string(),
+  })).optional(),
 });
 
 export type Expense = z.infer<typeof expenseSchema>;
 
-export type ExpenseWithId = Expense & { id: string };
+export type ExpenseWithId = Expense & {
+  id: string;
+};
 
 export type ChartData = {
-  name: string;
+  name:string;
   total: number;
 }[];

@@ -5,7 +5,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Cell, Legend } from 'recharts';
 import type { ExpenseWithId, ChartData } from '@/lib/types';
-import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
 
 interface DashboardProps {
   records: ExpenseWithId[];
@@ -16,15 +26,13 @@ const chartConfig = {
     label: 'Total',
     color: 'hsl(var(--chart-1))',
   },
-  'Food': { label: 'Food', color: 'hsl(var(--chart-1))' },
-  'Travel': { label: 'Travel', color: 'hsl(var(--chart-2))' },
-  'Office Supplies': { label: 'Office Supplies', color: 'hsl(var(--chart-3))' },
-  'Other': { label: 'Other', color: 'hsl(var(--chart-4))' },
 } satisfies ChartConfig;
 
-const COLORS = Object.entries(chartConfig).filter(([key]) => key !== 'total').map(([, value]) => value.color);
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF1943'];
 
 export function Dashboard({ records }: DashboardProps) {
+  const [selectedImage, setSelectedImage] = React.useState<string | null>(null);
+
   const analytics = React.useMemo(() => {
     if (records.length === 0) {
       return {
@@ -35,16 +43,16 @@ export function Dashboard({ records }: DashboardProps) {
       };
     }
 
-    const totalExpenses = records.reduce((sum, record) => sum + record.amount, 0);
+    const totalExpenses = records.reduce((sum, record) => sum + (record.collectedAmount || 0), 0);
     const transactionCount = records.length;
-    const averageExpense = totalExpenses / transactionCount;
+    const averageExpense = transactionCount > 0 ? totalExpenses / transactionCount : 0;
 
     const expensesByCategory = records.reduce((acc, record) => {
-      const category = record.category === 'Other' ? record.otherCategory || 'Other' : record.category;
+      const category = record.bankType || 'Unknown Bank';
       if (!acc[category]) {
         acc[category] = 0;
       }
-      acc[category] += record.amount;
+      acc[category] += record.collectedAmount || 0;
       return acc;
     }, {} as Record<string, number>);
 
@@ -61,59 +69,86 @@ export function Dashboard({ records }: DashboardProps) {
     };
   }, [records]);
 
+  const updatedChartConfig = React.useMemo(() => {
+    const dynamicColors: Record<string, { label: string; color: string }> = {};
+    analytics.expensesByCategory.forEach((entry, index) => {
+      dynamicColors[entry.name] = { label: entry.name, color: COLORS[index % COLORS.length] };
+    });
+    return { ...chartConfig, ...dynamicColors };
+  }, [analytics.expensesByCategory]);
+
+  const handleExportToXLSX = async () => {
+    const dataToExport = records.map(record => {
+      let uploadedFilesText = '';
+      if (record.uploadedFiles && record.uploadedFiles.length > 0) {
+        uploadedFilesText = record.uploadedFiles.map(file => file.name).join(', ');
+      }
+      
+      return {
+        'Group Name': record.groupName,
+        'Bank Type': record.bankType,
+        'Bank Account Number': record.bankAccountNumber,
+        'Name': record.name,
+        'Phone Number': record.phoneNumber,
+        'Collected Amount': record.collectedAmount,
+        'Buying Rate': record.buyingRate,
+        'Total MMK Transfer Amount': record.totalMmkTransferAmount,
+        'Uploaded Files': uploadedFilesText,
+        'Remark': record.remark,
+        'Timestamp': new Date(record.id).toLocaleString(),
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Transactions');
+
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+    saveAs(data, 'transaction_data.xlsx');
+  };
+
   if (records.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center border-2 border-dashed rounded-lg bg-card">
         <div className="text-6xl mb-4" role="img" aria-label="chart icon">📊</div>
         <h3 className="text-2xl font-bold tracking-tight">Your Dashboard Awaits</h3>
-        <p className="text-muted-foreground mt-2">Submit an expense record to see your data visualized here.</p>
+        <p className="text-muted-foreground mt-2">Submit a record to see your data visualized here.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {selectedImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setSelectedImage(null)}>
+          <img src={selectedImage} alt="Selected" className="max-h-[90vh] max-w-[90vw] rounded-lg" />
+        </div>
+      )}
       <div className="grid gap-6 md:grid-cols-3">
         <Card>
-          <CardHeader>
-            <CardTitle>Total Expenses</CardTitle>
-            <CardDescription>Sum of all transactions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">${analytics.totalExpenses.toFixed(2)}</p>
-          </CardContent>
+          <CardHeader><CardTitle>Total Collected Amount</CardTitle><CardDescription>Sum of all transactions</CardDescription></CardHeader>
+          <CardContent><p className="text-3xl font-bold">{analytics.totalExpenses.toFixed(2)}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle>Avg. Expense</CardTitle>
-            <CardDescription>Average transaction amount</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">${analytics.averageExpense.toFixed(2)}</p>
-          </CardContent>
+          <CardHeader><CardTitle>Avg. Transaction</CardTitle><CardDescription>Average transaction amount</CardDescription></CardHeader>
+          <CardContent><p className="text-3xl font-bold">{analytics.averageExpense.toFixed(2)}</p></CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle>Transactions</CardTitle>
-            <CardDescription>Total number of records</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{analytics.transactionCount}</p>
-          </CardContent>
+          <CardHeader><CardTitle>Transactions</CardTitle><CardDescription>Total number of records</CardDescription></CardHeader>
+          <CardContent><p className="text-3xl font-bold">{analytics.transactionCount}</p></CardContent>
         </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader>
-            <CardTitle>Expenses by Category</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Collected Amount by Bank</CardTitle></CardHeader>
           <CardContent>
-            <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+            <ChartContainer config={updatedChartConfig} className="min-h-[250px] w-full">
               <BarChart data={analytics.expensesByCategory} accessibilityLayer>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
-                <YAxis tickFormatter={(value) => `$${value}`} />
+                <YAxis tickFormatter={(value) => `RM ${value}`} />
                 <ChartTooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
                 <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -121,11 +156,9 @@ export function Dashboard({ records }: DashboardProps) {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader>
-            <CardTitle>Category Distribution</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Bank Distribution</CardTitle></CardHeader>
           <CardContent className="flex items-center justify-center pb-0">
-            <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+            <ChartContainer config={updatedChartConfig} className="min-h-[250px] w-full">
               <PieChart>
                 <ChartTooltip content={<ChartTooltipContent hideLabel />} />
                 <Pie data={analytics.expensesByCategory} dataKey="total" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
@@ -141,26 +174,57 @@ export function Dashboard({ records }: DashboardProps) {
       </div>
       
       <Card>
-        <CardHeader>
-          <CardTitle>Recent Transactions</CardTitle>
+        <CardHeader className="flex-row justify-between items-center">
+          <CardTitle>All Transactions</CardTitle>
+          <Button onClick={handleExportToXLSX} size="sm">Export to XLSX</Button>
         </CardHeader>
         <CardContent>
-          <ul className="space-y-1">
-            {records.slice(0, 5).map(record => (
-              <li key={record.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <p className="font-semibold">{record.vendor}</p>
-                    <p className="text-sm text-muted-foreground">{new Date(record.transactionDate).toLocaleDateString()}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-lg">${record.amount.toFixed(2)}</p>
-                  <Badge variant="outline">{record.category === 'Other' ? record.otherCategory : record.category}</Badge>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Group Name</TableHead>
+                <TableHead>Bank Type</TableHead>
+                <TableHead>Bank Acc No.</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Phone No.</TableHead>
+                <TableHead>Collected</TableHead>
+                <TableHead>Rate</TableHead>
+                <TableHead>Total MMK</TableHead>
+                <TableHead>Images</TableHead>
+                <TableHead>Remark</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {records.map(record => (
+                <TableRow key={record.id}>
+                  <TableCell>{record.groupName}</TableCell>
+                  <TableCell>{record.bankType}</TableCell>
+                  <TableCell>{record.bankAccountNumber}</TableCell>
+                  <TableCell>{record.name}</TableCell>
+                  <TableCell>{record.phoneNumber}</TableCell>
+                  <TableCell>{record.collectedAmount.toFixed(2)}</TableCell>
+                  <TableCell>{record.buyingRate.toFixed(2)}</TableCell>
+                  <TableCell>{record.totalMmkTransferAmount.toFixed(2)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {record.uploadedFiles && record.uploadedFiles.length > 0
+                        ? record.uploadedFiles.map((file, index) => (
+                            <img
+                              key={index}
+                              src={file.url}
+                              alt={file.name}
+                              className="h-10 w-10 cursor-pointer rounded-md object-cover"
+                              onClick={() => setSelectedImage(file.url)}
+                            />
+                          ))
+                        : 'No files'}
+                    </div>
+                  </TableCell>
+                  <TableCell>{record.remark || 'N/A'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>
