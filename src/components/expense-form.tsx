@@ -39,7 +39,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
     resolver: zodResolver(expenseSchema),
     defaultValues: {
       vendor: '',
-      amount: undefined,
+      amount: '' as unknown as number, // Use empty string for initial state
       category: 'Food',
       isBusinessExpense: true,
       notes: '',
@@ -192,7 +192,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                   <FormItem>
                     <FormLabel>Amount ($)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                      <Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value === undefined ? '' : field.value} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
