@@ -1,13 +1,14 @@
 import { z } from 'zod';
 
 export const expenseSchema = z.object({
-  groupName: z.string().regex(/^[a-zA-Z0-9]+$/, { message: 'Group Name must be alphanumeric.' }),
-  bankType: z.string().regex(/^[a-zA-Z0-9]+$/, { message: 'Bank Type must be alphanumeric.' }),
-  bankAccountNumber: z.string().min(1, { message: 'Bank Account Number is required.' }),
-  name: z.string().min(1, { message: 'Name is required.' }),
-  phoneNumber: z.string().min(1, { message: 'Phone Number is required.' }),
-  collectedAmount: z.coerce.number().min(0, { message: 'Collected Amount must be a non-negative number.' }),
-  buyingRate: z.coerce.number().min(0, { message: 'Buying Rate must be a non-negative number.' }),
+  groupName: z.string().min(1, { message: 'Group Name is required.' }),
+  date: z.date(),
+  bankType: z.string().min(1, { message: 'Bank Type is required.' }),
+  bankAccountNumber: z.string().optional(),
+  name: z.string().optional(),
+  phoneNumber: z.string().optional(),
+  collectedAmount: z.coerce.number({required_error: "Collected Amount is required.", invalid_type_error: "Collected Amount must be a number."}).min(0, { message: 'Collected Amount must be a non-negative number.' }),
+  buyingRate: z.coerce.number({required_error: "Buying Rate is required.", invalid_type_error: "Buying Rate must be a number."}).min(0, { message: 'Buying Rate must be a non-negative number.' }),
   totalMmkTransferAmount: z.coerce.number().min(0, { message: 'Total MMK Transfer Amount must be a non-negative number.' }),
   remark: z.string().optional().default(''),
   // Store file info (name and URL) instead of just the data
