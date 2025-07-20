@@ -22,7 +22,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
   DialogDescription,
   DialogClose
@@ -59,7 +58,7 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
 
   const analytics = React.useMemo(() => {
     const totalCollected = records.reduce((acc, record) => acc + (record.collectedAmount || 0), 0);
-    const totalMMK = records.reduce((acc, record) => acc + (record.totalMmkTransferAmount || 0), 0);
+    const totalMMK = records.reduce((acc, record) => acc + (record.mmkTotalAmount || record.totalMmkTransferAmount || 0), 0);
     
     const expensesByCategory = records.reduce((acc, record) => {
       const category = record.bankType || 'N/A';
@@ -100,8 +99,8 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
   }, [analytics.expensesByCategory, analytics.expensesByGroup]);
 
   const handleExportToXLSX = () => {
-    const worksheet = XLSX.utils.json_to_sheet(records.map((record, index) => ({
-      ID: index + 1,
+    const worksheet = XLSX.utils.json_to_sheet(records.map((record) => ({
+      ID: record.displayId,
       'Group Name': record.groupName,
       'Date': record.date ? new Date(record.date).toLocaleDateString() : 'N/A',
       'Bank Type': record.bankType,
@@ -111,8 +110,12 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
       'Name': record.name,
       'Phone Number': record.phoneNumber,
       'Collected Amount': record.collectedAmount,
+      'RM Service Fee': record.rmServiceFee,
+      'RM Total Amount': record.rmTotalAmount,
       'Buying Rate': record.buyingRate,
       'Total MMK Transfer': record.totalMmkTransferAmount,
+      'MMK Service Fee': record.mmkServiceFee,
+      'MMK Total Amount': record.mmkTotalAmount,
       'Remark': record.remark,
       'Images': record.uploadedFiles?.map(f => f.name).join(', '),
     })));
@@ -196,15 +199,19 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead><TableHead>Group</TableHead><TableHead>Bank</TableHead><TableHead>Township</TableHead><TableHead>Account No.</TableHead><TableHead>NRC</TableHead><TableHead>Name</TableHead><TableHead>Amount</TableHead><TableHead>Rate</TableHead><TableHead>Total MMK</TableHead><TableHead>Remark</TableHead><TableHead>Images</TableHead><TableHead>Actions</TableHead>
+                    <TableHead>ID</TableHead><TableHead>Group</TableHead><TableHead>Bank</TableHead><TableHead>Township</TableHead><TableHead>Account No.</TableHead><TableHead>NRC</TableHead><TableHead>Name</TableHead><TableHead>Amount</TableHead><TableHead>RM Service Fee</TableHead><TableHead>RM Total Amount</TableHead><TableHead>Rate</TableHead><TableHead>Total MMK</TableHead><TableHead>Service Fee</TableHead><TableHead>Total w/ Fee</TableHead><TableHead>Remark</TableHead><TableHead>Images</TableHead><TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {records.map((record, index) => (
+                  {records.map((record) => (
                     <TableRow key={record.id}>
-                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>{record.displayId}</TableCell>
                       <TableCell>{record.groupName}</TableCell><TableCell>{record.bankType}</TableCell><TableCell>{record.township}</TableCell><TableCell>{record.bankAccountNumber}</TableCell><TableCell>{record.nrcNumber}</TableCell><TableCell>{record.name}</TableCell>
-                      <TableCell>{formatNumber(record.collectedAmount)}</TableCell><TableCell>{formatNumber(record.buyingRate)}</TableCell><TableCell>{formatNumber(record.totalMmkTransferAmount)}</TableCell>
+                      <TableCell>{formatNumber(record.collectedAmount)}</TableCell>
+                      <TableCell>{formatNumber(record.rmServiceFee)}</TableCell>
+                      <TableCell>{formatNumber(record.rmTotalAmount)}</TableCell>
+                      <TableCell>{formatNumber(record.buyingRate)}</TableCell><TableCell>{formatNumber(record.totalMmkTransferAmount)}</TableCell>
+                      <TableCell>{formatNumber(record.mmkServiceFee)}</TableCell><TableCell>{formatNumber(record.mmkTotalAmount)}</TableCell>
                       <TableCell>{record.remark}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

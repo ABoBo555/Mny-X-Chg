@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { collection, onSnapshot, QuerySnapshot, DocumentData } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, QuerySnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ExpenseForm } from '@/components/expense-form';
 import { Dashboard } from '@/components/dashboard';
@@ -19,8 +19,11 @@ export default function Home() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    const expensesRef = collection(db, 'expenses');
+    const q = query(expensesRef, orderBy('displayId', 'asc'));
+
     const unsubscribe = onSnapshot(
-      collection(db, 'expenses'), 
+      q, 
       (snapshot: QuerySnapshot<DocumentData>) => {
         const newRecords = snapshot.docs.map(doc => {
           const data = doc.data();

@@ -3,7 +3,7 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { addDoc, collection, doc, updateDoc } from 'firebase/firestore';
+import { collection, doc, runTransaction, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -39,6 +39,7 @@ const formatNumber = (num: number | undefined | null) => {
 };
 
 const defaultFormValues: Omit<Expense, 'id'> = {
+  displayId: 0,
   groupName: '',
   date: new Date(),
   bankType: '',
@@ -48,10 +49,25 @@ const defaultFormValues: Omit<Expense, 'id'> = {
   name: '',
   phoneNumber: '',
   collectedAmount: undefined,
+  rmServiceFee: undefined,
+  rmTotalAmount: 0,
   buyingRate: undefined,
   totalMmkTransferAmount: 0,
+  mmkServiceFee: undefined,
+  mmkTotalAmount: 0,
   remark: '',
   uploadedFiles: [],
+};
+
+// Helper function to remove undefined properties from an object
+const removeUndefinedProps = (obj: any) => {
+    const newObj: any = {};
+    Object.keys(obj).forEach(key => {
+      if (obj[key] !== undefined) {
+        newObj[key] = obj[key];
+      }
+    });
+    return newObj;
 };
 
 function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) {
@@ -72,12 +88,25 @@ function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) 
   const { watch, setValue, getValues, formState: { errors }, reset } = form;
   const uploadedFiles = watch('uploadedFiles');
   const watchedRmCollectedAmount = watch('collectedAmount');
+  const watchedRmServiceFee = watch('rmServiceFee');
   const watchedRmBuyingRate = watch('buyingRate');
+  const watchedTotalMmkTransferAmount = watch('totalMmkTransferAmount');
+  const watchedMmkServiceFee = watch('mmkServiceFee');
 
   React.useEffect(() => {
     const total = (watchedRmCollectedAmount || 0) * (watchedRmBuyingRate || 0);
     setValue('totalMmkTransferAmount', total);
   }, [watchedRmCollectedAmount, watchedRmBuyingRate, setValue]);
+
+  React.useEffect(() => {
+    const totalWithFee = (watchedTotalMmkTransferAmount || 0) + (watchedMmkServiceFee || 0);
+    setValue('mmkTotalAmount', totalWithFee);
+  }, [watchedTotalMmkTransferAmount, watchedMmkServiceFee, setValue]);
+  
+  React.useEffect(() => {
+    const total = (watchedRmCollectedAmount || 0) + (watchedRmServiceFee || 0);
+    setValue('rmTotalAmount', total);
+  }, [watchedRmCollectedAmount, watchedRmServiceFee, setValue]);
 
   const handleRemoveImage = (index: number) => {
     const currentFiles = getValues('uploadedFiles') || [];
@@ -87,12 +116,26 @@ function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) 
 
   const onSubmit = async (data: Expense) => {
     setIsSubmitting(true);
+    const cleanData = removeUndefinedProps(data);
+
     try {
       if (expenseToEdit) {
         const docRef = doc(db, 'expenses', expenseToEdit.id);
-        await updateDoc(docRef, data);
+        await updateDoc(docRef, cleanData);
       } else {
-        await addDoc(collection(db, 'expenses'), data);
+        await runTransaction(db, async (transaction) => {
+          const counterRef = doc(db, 'counters', 'expenses');
+          const counterDoc = await transaction.get(counterRef);
+          
+          let newId = 1;
+          if (counterDoc.exists()) {
+            newId = counterDoc.data().lastId + 1;
+          }
+
+          const newExpenseRef = doc(collection(db, 'expenses'));
+          transaction.set(newExpenseRef, { ...cleanData, displayId: newId });
+          transaction.set(counterRef, { lastId: newId }, { merge: true });
+        });
       }
 
       toast({
@@ -152,34 +195,33 @@ function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) 
   return (
     <>
       <AlertDialog open={showErrorAlert} onOpenChange={onShowErrorAlertChange}>
-          <AlertDialogContent className="bg-red-50">
-              <AlertDialogHeader>
-                  <AlertDialogTitle className="text-red-800">Validation Error</AlertDialogTitle>
-                  <AlertDialogDescription asChild className="text-red-700">
-                    <div>
-                      Please fill out all required fields before submitting.
-                      <ul className="list-disc pl-5 mt-2">
-                          {errorMessages.map((msg, i) => <li key={i}>{msg}</li>)}
-                      </ul>
-                    </div>
-                  </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                  <AlertDialogAction onClick={() => setShowErrorAlert(false)} className="bg-red-600 hover:bg-red-700">OK</AlertDialogAction>
-              </AlertDialogFooter>
-          </AlertDialogContent>
+        <AlertDialogContent className="bg-red-50">
+            <AlertDialogHeader>
+                <AlertDialogTitle className="text-red-800">Validation Error</AlertDialogTitle>
+                <AlertDialogDescription asChild className="text-red-700">
+                  <div>
+                    Please fill out all required fields before submitting.
+                    <ul className="list-disc pl-5 mt-2">
+                        {errorMessages.map((msg, i) => <li key={i}>{msg}</li>)}
+                    </ul>
+                  </div>
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogAction onClick={() => setShowErrorAlert(false)} className="bg-red-600 hover:bg-red-700">OK</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
 
       <Card className="w-full shadow-lg">
         <CardHeader>
           <CardTitle>{expenseToEdit ? 'Edit Expense Record' : 'Add Expense Record'}</CardTitle>
-
           <CardDescription>Fill out the form below. <span className="text-red-500">(* indicates required)</span></CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
+            <FormField
                 control={form.control}
                 name="groupName"
                 render={({ field }) => (
@@ -278,10 +320,19 @@ function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) 
               <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Name</FormLabel> <FormControl><Input placeholder="Enter Name" {...field} value={field.value || ''} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="phoneNumber" render={({ field }) => ( <FormItem> <FormLabel>Phone Number</FormLabel> <FormControl><Input placeholder="Enter Phone Number" {...field} value={field.value || ''} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="collectedAmount" render={({ field }) => ( <FormItem> <FormLabel>Collected Amount <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="rmServiceFee" render={({ field }) => ( <FormItem> <FormLabel>RM Service Fee</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="rmTotalAmount" render={({ field }) => ( <FormItem> <FormLabel>RM Total Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} disabled value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="buyingRate" render={({ field }) => ( <FormItem> <FormLabel>Buying Rate <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="totalMmkTransferAmount" render={({ field }) => ( <FormItem> <FormLabel>Total MMK Transfer Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} disabled value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
-              <FormField control={form.control} name="remark" render={({ field }) => ( <FormItem> <FormLabel>Remark</FormLabel> <FormControl><Textarea placeholder="Add any remarks" {...field} value={field.value || ''} disabled={isSubmitting}/></FormControl> <FormMessage /> </FormItem> )}/>
 
+              {expenseToEdit && (
+                <>
+                  <FormField control={form.control} name="mmkServiceFee" render={({ field }) => ( <FormItem> <FormLabel>MMK Service Fee</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
+                  <FormField control={form.control} name="mmkTotalAmount" render={({ field }) => ( <FormItem> <FormLabel>MMK Total Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} disabled value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
+                </>
+              )}
+
+              <FormField control={form.control} name="remark" render={({ field }) => ( <FormItem> <FormLabel>Remark</FormLabel> <FormControl><Textarea placeholder="Add any remarks" {...field} value={field.value || ''} disabled={isSubmitting}/></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField
                 control={form.control}
                 name="uploadedFiles"
@@ -344,8 +395,16 @@ function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) 
                                   <div className="font-semibold text-right">Name:</div>                        <div>{watch('name')}</div>
                                   <div className="font-semibold text-right">Phone Number:</div>                <div>{watch('phoneNumber')}</div>
                                   <div className="font-semibold text-right">Collected Amount:</div>            <strong>{formatNumber(watch('collectedAmount'))}</strong>
+                                  <div className="font-semibold text-right">RM Service Fee:</div>              <strong>{formatNumber(watch('rmServiceFee'))}</strong>
+                                  <div className="font-semibold text-right">RM Total Amount:</div>             <strong>{formatNumber(watch('rmTotalAmount'))}</strong>
                                   <div className="font-semibold text-right">Buying Rate:</div>                 <strong>{formatNumber(watch('buyingRate'))}</strong>
                                   <div className="font-semibold text-right">Total MMK Amount:</div>            <strong>{formatNumber(watch('totalMmkTransferAmount'))}</strong>
+                                  {expenseToEdit && (
+                                    <>
+                                      <div className="font-semibold text-right">MMK Service Fee:</div> <strong>{formatNumber(watch('mmkServiceFee'))}</strong>
+                                      <div className="font-semibold text-right">Total MMK w/ Fee:</div> <strong>{formatNumber(watch('mmkTotalAmount'))}</strong>
+                                    </>
+                                  )}
                                   {watch('remark') && <>
                                       <div className="font-semibold text-right self-start">Remark:</div>
                                       <div className="whitespace-pre-wrap">{watch('remark')}</div>
