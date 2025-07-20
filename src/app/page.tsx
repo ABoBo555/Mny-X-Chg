@@ -1,28 +1,51 @@
 'use client';
 
 import React from 'react';
+import { collection, onSnapshot, QuerySnapshot, DocumentData } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { ExpenseForm } from '@/components/expense-form';
 import { Dashboard } from '@/components/dashboard';
 import { type ExpenseWithId } from '@/lib/types';
 import { Toaster } from '@/components/ui/toaster';
 import { FormFlowLogo } from '@/components/formflow-logo';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
   const [records, setRecords] = React.useState<ExpenseWithId[]>([]);
   const [expenseToEdit, setExpenseToEdit] = React.useState<ExpenseWithId | null>(null);
   const [activeTab, setActiveTab] = React.useState('form');
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const handleSave = (record: ExpenseWithId) => {
-    setRecords(prevRecords => {
-      const existingRecordIndex = prevRecords.findIndex(r => r.id === record.id);
-      if (existingRecordIndex !== -1) {
-        const newRecords = [...prevRecords];
-        newRecords[existingRecordIndex] = record;
-        return newRecords;
+  React.useEffect(() => {
+    const unsubscribe = onSnapshot(
+      collection(db, 'expenses'), 
+      (snapshot: QuerySnapshot<DocumentData>) => {
+        const newRecords = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            date: data.date.toDate ? data.date.toDate() : new Date(data.date),
+          } as ExpenseWithId;
+        });
+        setRecords(newRecords);
+        setLoading(false);
+        setError(null);
+      },
+      (err) => {
+        console.error("Firestore error:", err);
+        setError("Failed to load data. Please check your Firestore security rules.");
+        setLoading(false);
       }
-      return [...prevRecords, record];
-    });
+    );
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
+
+  const handleSaveSuccess = () => {
     setExpenseToEdit(null);
     setActiveTab('dashboard');
   };
@@ -42,21 +65,32 @@ export default function Home() {
           </h1>
         </header>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="form">Form</TabsTrigger>
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          </TabsList>
-          <TabsContent value="form">
-            <div className="grid grid-cols-1 gap-8">
-              <ExpenseForm onSave={handleSave} expenseToEdit={expenseToEdit} />
-            </div>
-          </TabsContent>
-          <TabsContent value="dashboard">
-            <Dashboard records={records} onEdit={handleEdit} />
-          </TabsContent>
-        </Tabs>
-
+        {loading ? (
+          <div className="space-y-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-80 w-full" />
+          </div>
+        ) : error ? (
+          <div className="text-center text-red-500">
+            <p>{error}</p>
+            <p>Please update your security rules in the Firebase console.</p>
+          </div>
+        ) : (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="form">Form</TabsTrigger>
+              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            </TabsList>
+            <TabsContent value="form">
+              <div className="grid grid-cols-1 gap-8">
+                <ExpenseForm onSaveSuccess={handleSaveSuccess} expenseToEdit={expenseToEdit} />
+              </div>
+            </TabsContent>
+            <TabsContent value="dashboard">
+              <Dashboard records={records} onEdit={handleEdit} />
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
       <Toaster />
     </main>

@@ -8,7 +8,7 @@ import type { ExpenseWithId, ChartData } from '@/lib/types';
 import { Button } from './ui/button';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { FilePenLine } from 'lucide-react';
+import { FilePenLine, Trash2 } from 'lucide-react';
 import {
   Table,
   TableHeader,
@@ -17,7 +17,19 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogDescription,
+  DialogClose
+} from '@/components/ui/dialog';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 interface DashboardProps {
   records: ExpenseWithId[];
@@ -41,9 +53,10 @@ const formatNumber = (num: number | undefined | null) => {
 
 // Main Dashboard Component
 export function Dashboard({ records, onEdit }: DashboardProps) {
+  const { toast } = useToast();
   const [selectedImageUrl, setSelectedImageUrl] = React.useState<string | null>(null);
+  const [recordToDelete, setRecordToDelete] = React.useState<ExpenseWithId | null>(null);
 
-  // Calculate analytics data
   const analytics = React.useMemo(() => {
     const totalCollected = records.reduce((acc, record) => acc + (record.collectedAmount || 0), 0);
     const totalMMK = records.reduce((acc, record) => acc + (record.totalMmkTransferAmount || 0), 0);
@@ -73,7 +86,6 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
     return { totalCollected, totalMMK, expensesByCategory, expensesByGroup };
   }, [records]);
   
-  // Create a dynamic chart config for the legend
   const updatedChartConfig = React.useMemo(() => {
     const config: ChartConfig = { ...chartConfig };
     [...analytics.expensesByCategory, ...analytics.expensesByGroup].forEach((item, index) => {
@@ -117,6 +129,26 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
     }
   };
 
+  const handleDelete = async () => {
+    if (recordToDelete) {
+      try {
+        await deleteDoc(doc(db, 'expenses', recordToDelete.id));
+        toast({
+          title: 'Record Deleted',
+          description: 'The expense record has been successfully deleted.',
+        });
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Delete Failed',
+          description: 'An error occurred while deleting the record.',
+        });
+      } finally {
+        setRecordToDelete(null);
+      }
+    }
+  };
+
   return (
     <>
       <Dialog open={!!selectedImageUrl} onOpenChange={handleOpenChange}>
@@ -129,38 +161,30 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
             )}
         </DialogContent>
       </Dialog>
+      
+      <Dialog open={!!recordToDelete} onOpenChange={(isOpen) => !isOpen && setRecordToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Are you absolutely sure?</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. This will permanently delete the record for {recordToDelete?.groupName} - {recordToDelete?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline" onClick={() => setRecordToDelete(null)}>Cancel</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                  <CardHeader>
-                      <CardTitle>Total Records</CardTitle>
-                      <CardDescription>{records.length} transactions recorded</CardDescription>
-                  </CardHeader>
-              </Card>
-              <Card>
-                  <CardHeader>
-                      <CardTitle>Total Collected</CardTitle>
-                      <CardDescription>RM {formatNumber(analytics.totalCollected)}</CardDescription>
-                  </CardHeader>
-              </Card>
-              <Card>
-                  <CardHeader>
-                      <CardTitle>Total MMK Transfer</CardTitle>
-                      <CardDescription>MMK {formatNumber(analytics.totalMMK)}</CardDescription>
-                  </CardHeader>
-              </Card>
-              <Card>
-                  <CardHeader>
-                      <CardTitle>Avg. Buying Rate</CardTitle>
-                      <CardDescription>
-                          {
-                              records.length > 0 && analytics.totalCollected > 0
-                              ? (analytics.totalMMK / analytics.totalCollected).toFixed(2)
-                              : '0.00'
-                          }
-                      </CardDescription>
-                  </CardHeader>
-              </Card>
+              <Card><CardHeader><CardTitle>Total Records</CardTitle><CardDescription>{records.length} transactions</CardDescription></CardHeader></Card>
+              <Card><CardHeader><CardTitle>Total Collected</CardTitle><CardDescription>RM {formatNumber(analytics.totalCollected)}</CardDescription></CardHeader></Card>
+              <Card><CardHeader><CardTitle>Total MMK Transfer</CardTitle><CardDescription>MMK {formatNumber(analytics.totalMMK)}</CardDescription></CardHeader></Card>
+              <Card><CardHeader><CardTitle>Avg. Buying Rate</CardTitle><CardDescription>{records.length > 0 && analytics.totalCollected > 0 ? (analytics.totalMMK / analytics.totalCollected).toFixed(2) : '0.00'}</CardDescription></CardHeader></Card>
           </div>
 
           <Card>
@@ -172,52 +196,30 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Group</TableHead>
-                    <TableHead>Bank</TableHead>
-                    <TableHead>Township</TableHead>
-                    <TableHead>Account No.</TableHead>
-                    <TableHead>NRC Number</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Rate</TableHead>
-                    <TableHead>Total MMK</TableHead>
-                    <TableHead>Remark</TableHead>
-                    <TableHead>Images</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>ID</TableHead><TableHead>Group</TableHead><TableHead>Bank</TableHead><TableHead>Township</TableHead><TableHead>Account No.</TableHead><TableHead>NRC</TableHead><TableHead>Name</TableHead><TableHead>Amount</TableHead><TableHead>Rate</TableHead><TableHead>Total MMK</TableHead><TableHead>Remark</TableHead><TableHead>Images</TableHead><TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {records.map((record, index) => (
                     <TableRow key={record.id}>
                       <TableCell>{index + 1}</TableCell>
-                      <TableCell>{record.groupName}</TableCell>
-                      <TableCell>{record.bankType}</TableCell>
-                      <TableCell>{record.township}</TableCell>
-                      <TableCell>{record.bankAccountNumber}</TableCell>
-                      <TableCell>{record.nrcNumber}</TableCell>
-                      <TableCell>{record.name}</TableCell>
-                      <TableCell>{formatNumber(record.collectedAmount)}</TableCell>
-                      <TableCell>{formatNumber(record.buyingRate)}</TableCell>
-                      <TableCell>{formatNumber(record.totalMmkTransferAmount)}</TableCell>
+                      <TableCell>{record.groupName}</TableCell><TableCell>{record.bankType}</TableCell><TableCell>{record.township}</TableCell><TableCell>{record.bankAccountNumber}</TableCell><TableCell>{record.nrcNumber}</TableCell><TableCell>{record.name}</TableCell>
+                      <TableCell>{formatNumber(record.collectedAmount)}</TableCell><TableCell>{formatNumber(record.buyingRate)}</TableCell><TableCell>{formatNumber(record.totalMmkTransferAmount)}</TableCell>
                       <TableCell>{record.remark}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {record.uploadedFiles?.map((file, idx) => (
                             <button key={idx} onClick={() => setSelectedImageUrl(file.url)} className="focus:outline-none">
-                              <img
-                                src={file.url}
-                                alt={file.name}
-                                className="h-10 w-10 rounded-md object-cover transition-transform hover:scale-110 cursor-pointer"
-                              />
+                              <img src={file.url} alt={file.name} className="h-10 w-10 rounded-md object-cover transition-transform hover:scale-110 cursor-pointer"/>
                             </button>
                           ))}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => onEdit(record)}>
-                          <FilePenLine className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => onEdit(record)}><FilePenLine className="h-4 w-4" /></Button>
+                          <Button variant="destructive" size="icon" onClick={() => setRecordToDelete(record)}><Trash2 className="h-4 w-4" /></Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -229,48 +231,15 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
         <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
             <Card>
               <CardHeader><CardTitle>Collected Amount by Bank</CardTitle></CardHeader>
-              <CardContent>
-                <ChartContainer config={updatedChartConfig} className="min-h-[300px] w-full">
-                  <BarChart data={analytics.expensesByCategory} accessibilityLayer>
-                    <CartesianGrid vertical={false} />
-                    <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
-                    <YAxis tickFormatter={(value) => `RM ${value}`} />
-                    <ChartTooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
-                    <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
+              <CardContent><ChartContainer config={updatedChartConfig} className="min-h-[300px] w-full"><BarChart data={analytics.expensesByCategory} accessibilityLayer><CartesianGrid vertical={false} /><XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} /><YAxis tickFormatter={(value) => `RM ${value}`} /><ChartTooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} /><Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /></BarChart></ChartContainer></CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Bank Distribution</CardTitle></CardHeader>
-              <CardContent className="flex items-center justify-center pb-0">
-                <ChartContainer config={updatedChartConfig} className="min-h-[300px] w-full">
-                  <PieChart>
-                    <ChartTooltip content={<ChartTooltipContent hideLabel />} />
-                    <Pie data={analytics.expensesByCategory} dataKey="total" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2}>
-                      {analytics.expensesByCategory.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Legend />
-                  </PieChart>
-                </ChartContainer>
-              </CardContent>
+              <CardContent className="flex items-center justify-center pb-0"><ChartContainer config={updatedChartConfig} className="min-h-[300px] w-full"><PieChart><ChartTooltip content={<ChartTooltipContent hideLabel />} /><Pie data={analytics.expensesByCategory} dataKey="total" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2}>{analytics.expensesByCategory.map((entry, index) => (<Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />))}</Pie><Legend /></PieChart></ChartContainer></CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Collected Amount by Group</CardTitle></CardHeader>
-              <CardContent>
-                <ChartContainer config={updatedChartConfig} className="min-h-[300px] w-full">
-                  <BarChart data={analytics.expensesByGroup} accessibilityLayer>
-                    <CartesianGrid vertical={false} />
-                    <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
-                    <YAxis tickFormatter={(value) => `RM ${value}`} />
-                    <ChartTooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} />
-
-                    <Bar dataKey="total" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ChartContainer>
-              </CardContent>
+              <CardContent><ChartContainer config={updatedChartConfig} className="min-h-[300px] w-full"><BarChart data={analytics.expensesByGroup} accessibilityLayer><CartesianGrid vertical={false} /><XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} /><YAxis tickFormatter={(value) => `RM ${value}`} /><ChartTooltip cursor={{ fill: 'hsl(var(--muted))' }} content={<ChartTooltipContent />} /><Bar dataKey="total" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} /></BarChart></ChartContainer></CardContent>
             </Card>
         </div>
       </div>
