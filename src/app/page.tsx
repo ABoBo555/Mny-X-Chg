@@ -10,9 +10,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function Home() {
   const [records, setRecords] = React.useState<ExpenseWithId[]>([]);
+  const [expenseToEdit, setExpenseToEdit] = React.useState<ExpenseWithId | null>(null);
+  const [activeTab, setActiveTab] = React.useState('form');
 
-  const addRecord = (record: ExpenseWithId) => {
-    setRecords(prevRecords => [...prevRecords, record]);
+  const handleSave = (record: ExpenseWithId) => {
+    setRecords(prevRecords => {
+      const existingRecordIndex = prevRecords.findIndex(r => r.id === record.id);
+      if (existingRecordIndex !== -1) {
+        const newRecords = [...prevRecords];
+        newRecords[existingRecordIndex] = record;
+        return newRecords;
+      }
+      return [...prevRecords, record];
+    });
+    setExpenseToEdit(null);
+    setActiveTab('dashboard');
+  };
+
+  const handleEdit = (record: ExpenseWithId) => {
+    setExpenseToEdit(record);
+    setActiveTab('form');
   };
 
   return (
@@ -25,18 +42,18 @@ export default function Home() {
           </h1>
         </header>
 
-        <Tabs defaultValue="form" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="form">Form</TabsTrigger>
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           </TabsList>
           <TabsContent value="form">
             <div className="grid grid-cols-1 gap-8">
-              <ExpenseForm addRecord={addRecord} />
+              <ExpenseForm onSave={handleSave} expenseToEdit={expenseToEdit} />
             </div>
           </TabsContent>
           <TabsContent value="dashboard">
-            <Dashboard records={records} />
+            <Dashboard records={records} onEdit={handleEdit} />
           </TabsContent>
         </Tabs>
 

@@ -21,6 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 interface DashboardProps {
   records: ExpenseWithId[];
+  onEdit: (record: ExpenseWithId) => void;
 }
 
 const chartConfig = {
@@ -39,7 +40,7 @@ const formatNumber = (num: number | undefined | null) => {
 };
 
 // Main Dashboard Component
-export function Dashboard({ records }: DashboardProps) {
+export function Dashboard({ records, onEdit }: DashboardProps) {
   const [selectedImageUrl, setSelectedImageUrl] = React.useState<string | null>(null);
 
   // Calculate analytics data
@@ -108,11 +109,6 @@ export function Dashboard({ records }: DashboardProps) {
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const data = new Blob([excelBuffer], { type: 'application/octet-stream' });
     saveAs(data, 'transactions.xlsx');
-  };
-
-  const handleEdit = (id: string) => {
-    // Placeholder for future edit functionality
-    console.log('Edit record:', id);
   };
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -219,7 +215,7 @@ export function Dashboard({ records }: DashboardProps) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(record.id)}>
+                        <Button variant="ghost" size="icon" onClick={() => onEdit(record)}>
                           <FilePenLine className="h-4 w-4" />
                         </Button>
                       </TableCell>

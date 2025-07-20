@@ -18,7 +18,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 
 interface ExpenseFormProps {
-  addRecord: (record: ExpenseWithId) => void;
+  onSave: (record: ExpenseWithId) => void;
+  expenseToEdit: ExpenseWithId | null;
 }
 
 const fileToBase64 = (file: File): Promise<string> => {
@@ -30,7 +31,6 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-// Helper to format numbers with commas
 const formatNumber = (num: number | undefined | null) => {
     if (num === undefined || num === null) return '0';
     return new Intl.NumberFormat('en-US').format(num);
@@ -52,16 +52,18 @@ const defaultFormValues: Omit<Expense, 'id'> = {
   uploadedFiles: [],
 };
 
-export function ExpenseForm({ addRecord }: ExpenseFormProps) {
+function ExpenseFormContent({ onSave, expenseToEdit }: ExpenseFormProps) {
   const { toast } = useToast();
   const [isReviewing, setIsReviewing] = React.useState(false);
   const [showErrorAlert, setShowErrorAlert] = React.useState(false);
   const [errorMessages, setErrorMessages] = React.useState<string[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  
+
   const form = useForm<Expense>({
     resolver: zodResolver(expenseSchema),
-    defaultValues: defaultFormValues,
+    defaultValues: expenseToEdit
+      ? { ...expenseToEdit, date: new Date(expenseToEdit.date) }
+      : defaultFormValues,
   });
 
   const { watch, setValue, getValues, formState: { errors }, reset } = form;
@@ -81,15 +83,15 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
   };
 
   const onSubmit = async (data: Expense) => {
-    const newRecord: ExpenseWithId = { ...data, id: new Date().toISOString() };
-    addRecord(newRecord);
+    const recordWithId = { ...data, id: expenseToEdit?.id || new Date().toISOString() };
+    onSave(recordWithId);
     reset(defaultFormValues);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
     toast({
       title: 'Record Saved!',
-      description: 'Your expense has been added and the dashboard is updated.',
+      description: `Your expense has been ${expenseToEdit ? 'updated' : 'added'}.`,
     });
     setIsReviewing(false);
   };
@@ -147,7 +149,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
 
       <Card className="w-full shadow-lg">
         <CardHeader>
-          <CardTitle>Add Expense Record</CardTitle>
+          <CardTitle>{expenseToEdit ? 'Edit Expense Record' : 'Add Expense Record'}</CardTitle>
           <CardDescription>Fill out the form below. <span className="text-red-500">(* indicates required)</span></CardDescription>
         </CardHeader>
         <CardContent>
@@ -159,7 +161,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Group Name <span className="text-red-500">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a group" />
@@ -191,7 +193,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                             className="w-full pl-3 text-left font-normal"
                           >
                             {field.value ? (
-                              format(field.value, 'EEE-dd-MMM-yyyy')
+                              format(new Date(field.value), 'EEE-dd-MMM-yyyy')
                             ) : (
                               <span>Pick a date</span>
                             )}
@@ -202,7 +204,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={field.value}
+                          selected={field.value ? new Date(field.value) : undefined}
                           onSelect={field.onChange}
                           initialFocus
                         />
@@ -218,7 +220,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Bank Type <span className="text-red-500">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a bank" />
@@ -253,7 +255,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
               <FormField control={form.control} name="buyingRate" render={({ field }) => ( <FormItem> <FormLabel>Buying Rate <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="totalMmkTransferAmount" render={({ field }) => ( <FormItem> <FormLabel>Total MMK Transfer Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} disabled value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="remark" render={({ field }) => ( <FormItem> <FormLabel>Remark</FormLabel> <FormControl><Textarea placeholder="Add any remarks" {...field} value={field.value || ''}/></FormControl> <FormMessage /> </FormItem> )}/>
-              
+
               <FormField
                 control={form.control}
                 name="uploadedFiles"
@@ -294,7 +296,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                   </FormItem>
                 )}
               />
-              
+
               <div className="flex space-x-4">
                   <AlertDialog open={isReviewing} onOpenChange={setIsReviewing}>
                       <AlertDialogContent>
@@ -307,7 +309,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                           <div className="max-h-96 overflow-y-auto pr-4 text-sm">
                               <div className="grid grid-cols-[max-content,1fr] gap-x-4 gap-y-2 items-center">
                                   <div className="font-semibold text-right">Group Name:</div>                  <div>{watch('groupName')}</div>
-                                  <div className="font-semibold text-right">Date:</div>                        <div>{watch('date') ? format(watch('date'), 'EEE-dd-MMM-yyyy') : 'N/A'}</div>
+                                  <div className="font-semibold text-right">Date:</div>                        <div>{watch('date') ? format(new Date(watch('date')), 'EEE-dd-MMM-yyyy') : 'N/A'}</div>
                                   <div className="font-semibold text-right">Bank Type:</div>                   <div>{watch('bankType')}</div>
                                   <div className="font-semibold text-right">Township:</div>                    <div>{watch('township')}</div>
                                   <div className="font-semibold text-right">Bank Account No.:</div>            <div>{watch('bankAccountNumber')}</div>
@@ -333,8 +335,8 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                           </AlertDialogFooter>
                       </AlertDialogContent>
                   </AlertDialog>
-                  
-                  <Button type="button" className="flex-1 text-lg py-6" onClick={handleReviewSubmit}>Review Info & Submit</Button>
+
+                  <Button type="button" className="flex-1 text-lg py-6" onClick={handleReviewSubmit}>{expenseToEdit ? 'Review & Update' : 'Review Info & Submit'}</Button>
                   <Button type="button" variant="outline" className="flex-1 text-lg py-6" onClick={handleClearForm}>Clear</Button>
               </div>
             </form>
@@ -343,4 +345,8 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
       </Card>
     </>
   );
+}
+
+export function ExpenseForm(props: ExpenseFormProps) {
+  return <ExpenseFormContent key={props.expenseToEdit?.id ?? 'new'} {...props} />;
 }
