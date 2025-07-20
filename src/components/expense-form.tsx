@@ -36,33 +36,38 @@ const formatNumber = (num: number | undefined | null) => {
     return new Intl.NumberFormat('en-US').format(num);
 };
 
+const defaultFormValues: Omit<Expense, 'id'> = {
+  groupName: '',
+  date: new Date(),
+  bankType: '',
+  township: '',
+  bankAccountNumber: '',
+  nrcNumber: '',
+  name: '',
+  phoneNumber: '',
+  collectedAmount: undefined,
+  buyingRate: undefined,
+  totalMmkTransferAmount: 0,
+  remark: '',
+  uploadedFiles: [],
+};
+
 export function ExpenseForm({ addRecord }: ExpenseFormProps) {
   const { toast } = useToast();
   const [isReviewing, setIsReviewing] = React.useState(false);
   const [showErrorAlert, setShowErrorAlert] = React.useState(false);
   const [errorMessages, setErrorMessages] = React.useState<string[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   
   const form = useForm<Expense>({
     resolver: zodResolver(expenseSchema),
-    defaultValues: {
-      groupName: '',
-      date: new Date(),
-      bankType: '',
-      bankAccountNumber: '',
-      name: '',
-      phoneNumber: '',
-      collectedAmount: undefined,
-      buyingRate: undefined,
-      totalMmkTransferAmount: 0,
-      remark: '',
-      uploadedFiles: [],
-    },
+    defaultValues: defaultFormValues,
   });
 
-  const { watch, setValue, getValues, formState: { errors } } = form;
+  const { watch, setValue, getValues, formState: { errors }, reset } = form;
+  const uploadedFiles = watch('uploadedFiles');
   const watchedRmCollectedAmount = watch('collectedAmount');
   const watchedRmBuyingRate = watch('buyingRate');
-  const uploadedFiles = watch('uploadedFiles');
 
   React.useEffect(() => {
     const total = (watchedRmCollectedAmount || 0) * (watchedRmBuyingRate || 0);
@@ -78,7 +83,10 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
   const onSubmit = async (data: Expense) => {
     const newRecord: ExpenseWithId = { ...data, id: new Date().toISOString() };
     addRecord(newRecord);
-    form.reset();
+    reset(defaultFormValues);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     toast({
       title: 'Record Saved!',
       description: 'Your expense has been added and the dashboard is updated.',
@@ -103,20 +111,32 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
   };
 
   const handleClearForm = () => {
-    form.reset();
+    reset(defaultFormValues);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const onShowErrorAlertChange = (open: boolean) => {
+    if (!open) {
+      setErrorMessages([]);
+    }
+    setShowErrorAlert(open);
   };
 
   return (
     <>
-      <AlertDialog open={showErrorAlert} onOpenChange={setShowErrorAlert}>
+      <AlertDialog open={showErrorAlert} onOpenChange={onShowErrorAlertChange}>
           <AlertDialogContent className="bg-red-50">
               <AlertDialogHeader>
                   <AlertDialogTitle className="text-red-800">Validation Error</AlertDialogTitle>
-                  <AlertDialogDescription className="text-red-700">
+                  <AlertDialogDescription asChild className="text-red-700">
+                    <div>
                       Please fill out all required fields before submitting.
                       <ul className="list-disc pl-5 mt-2">
                           {errorMessages.map((msg, i) => <li key={i}>{msg}</li>)}
                       </ul>
+                    </div>
                   </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -139,7 +159,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Group Name <span className="text-red-500">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value || ''}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a group" />
@@ -198,7 +218,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Bank Type <span className="text-red-500">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value || ''}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a bank" />
@@ -224,13 +244,15 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                   </FormItem>
                 )}
               />
-              <FormField control={form.control} name="bankAccountNumber" render={({ field }) => ( <FormItem> <FormLabel>Bank Account Number</FormLabel> <FormControl><Input placeholder="Enter Bank Account Number" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
-              <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Name</FormLabel> <FormControl><Input placeholder="Enter Name" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
-              <FormField control={form.control} name="phoneNumber" render={({ field }) => ( <FormItem> <FormLabel>Phone Number</FormLabel> <FormControl><Input placeholder="Enter Phone Number" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
-              <FormField control={form.control} name="collectedAmount" render={({ field }) => ( <FormItem> <FormLabel>Collected Amount <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )}/>
-              <FormField control={form.control} name="buyingRate" render={({ field }) => ( <FormItem> <FormLabel>Buying Rate <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="township" render={({ field }) => ( <FormItem> <FormLabel>Township (Bank Branch)</FormLabel> <FormControl><Input placeholder="Enter Township" {...field} value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="bankAccountNumber" render={({ field }) => ( <FormItem> <FormLabel>Bank Account Number</FormLabel> <FormControl><Input placeholder="Enter Bank Account Number" {...field} value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="nrcNumber" render={({ field }) => ( <FormItem> <FormLabel>NRC Number</FormLabel> <FormControl><Input placeholder="Enter NRC Number" {...field} value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Name</FormLabel> <FormControl><Input placeholder="Enter Name" {...field} value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="phoneNumber" render={({ field }) => ( <FormItem> <FormLabel>Phone Number</FormLabel> <FormControl><Input placeholder="Enter Phone Number" {...field} value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="collectedAmount" render={({ field }) => ( <FormItem> <FormLabel>Collected Amount <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="buyingRate" render={({ field }) => ( <FormItem> <FormLabel>Buying Rate <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="totalMmkTransferAmount" render={({ field }) => ( <FormItem> <FormLabel>Total MMK Transfer Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} disabled value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
-              <FormField control={form.control} name="remark" render={({ field }) => ( <FormItem> <FormLabel>Remark</FormLabel> <FormControl><Textarea placeholder="Add any remarks" {...field} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="remark" render={({ field }) => ( <FormItem> <FormLabel>Remark</FormLabel> <FormControl><Textarea placeholder="Add any remarks" {...field} value={field.value || ''}/></FormControl> <FormMessage /> </FormItem> )}/>
               
               <FormField
                 control={form.control}
@@ -240,6 +262,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                     <FormLabel>Receipt Image</FormLabel>
                     <FormControl>
                       <Input
+                        ref={fileInputRef}
                         type="file"
                         accept="image/png, image/jpeg, image/jpg"
                         multiple
@@ -252,7 +275,7 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                                 return { name: file.name, url };
                               })
                             );
-                            field.onChange(fileInfo);
+                            setValue('uploadedFiles', [...(getValues('uploadedFiles') || []), ...fileInfo]);
                           }
                         }}
                       />
@@ -277,8 +300,8 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                       <AlertDialogContent>
                           <AlertDialogHeader>
                               <AlertDialogTitle>Review Your Submission</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                  Please check the details carefully before submitting.
+                              <AlertDialogDescription asChild>
+                                <div>Please check the details carefully before submitting.</div>
                               </AlertDialogDescription>
                           </AlertDialogHeader>
                           <div className="max-h-96 overflow-y-auto pr-4 text-sm">
@@ -286,7 +309,9 @@ export function ExpenseForm({ addRecord }: ExpenseFormProps) {
                                   <div className="font-semibold text-right">Group Name:</div>                  <div>{watch('groupName')}</div>
                                   <div className="font-semibold text-right">Date:</div>                        <div>{watch('date') ? format(watch('date'), 'EEE-dd-MMM-yyyy') : 'N/A'}</div>
                                   <div className="font-semibold text-right">Bank Type:</div>                   <div>{watch('bankType')}</div>
+                                  <div className="font-semibold text-right">Township:</div>                    <div>{watch('township')}</div>
                                   <div className="font-semibold text-right">Bank Account No.:</div>            <div>{watch('bankAccountNumber')}</div>
+                                  <div className="font-semibold text-right">NRC Number:</div>                  <div>{watch('nrcNumber')}</div>
                                   <div className="font-semibold text-right">Name:</div>                        <div>{watch('name')}</div>
                                   <div className="font-semibold text-right">Phone Number:</div>                <div>{watch('phoneNumber')}</div>
                                   <div className="font-semibold text-right">Collected Amount:</div>            <strong>{formatNumber(watch('collectedAmount'))}</strong>
