@@ -17,6 +17,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = React.useState('form');
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [highlightedRecordId, setHighlightedRecordId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const expensesRef = collection(db, 'expenses');
@@ -48,13 +49,19 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  const handleSaveSuccess = () => {
+  const handleSaveSuccess = (updatedRecord?: ExpenseWithId) => {
+    if (updatedRecord && (updatedRecord.mmkServiceFee ?? 0) > 0) {
+      setHighlightedRecordId(updatedRecord.id);
+    } else {
+      setHighlightedRecordId(null);
+    }
     setExpenseToEdit(null);
     setActiveTab('dashboard');
   };
 
   const handleEdit = (record: ExpenseWithId) => {
     setExpenseToEdit(record);
+    setHighlightedRecordId(null);
     setActiveTab('form');
   };
 
@@ -90,7 +97,7 @@ export default function Home() {
               </div>
             </TabsContent>
             <TabsContent value="dashboard">
-              <Dashboard records={records} onEdit={handleEdit} />
+              <Dashboard records={records} onEdit={handleEdit} highlightedRecordId={highlightedRecordId} />
             </TabsContent>
           </Tabs>
         )}

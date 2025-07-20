@@ -20,7 +20,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 
 interface ExpenseFormProps {
-  onSaveSuccess: () => void;
+  onSaveSuccess: (updatedRecord?: ExpenseWithId) => void;
   expenseToEdit: ExpenseWithId | null;
 }
 
@@ -119,9 +119,11 @@ function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) 
     const cleanData = removeUndefinedProps(data);
 
     try {
+      let updatedRecord: ExpenseWithId | undefined;
       if (expenseToEdit) {
         const docRef = doc(db, 'expenses', expenseToEdit.id);
         await updateDoc(docRef, cleanData);
+        updatedRecord = { ...expenseToEdit, ...cleanData };
       } else {
         await runTransaction(db, async (transaction) => {
           const counterRef = doc(db, 'counters', 'expenses');
@@ -147,7 +149,7 @@ function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) 
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      onSaveSuccess();
+      onSaveSuccess(updatedRecord);
 
     } catch (error) {
       console.error("Error saving document: ", error);

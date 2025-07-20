@@ -26,13 +26,14 @@ import {
   DialogDescription,
   DialogClose
 } from '@/components/ui/dialog';
-import { doc, deleteDoc } from 'firebase/firestore';
+import { doc, runTransaction, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
 interface DashboardProps {
   records: ExpenseWithId[];
   onEdit: (record: ExpenseWithId) => void;
+  highlightedRecordId: string | null;
 }
 
 const chartConfig = {
@@ -51,7 +52,7 @@ const formatNumber = (num: number | undefined | null) => {
 };
 
 // Main Dashboard Component
-export function Dashboard({ records, onEdit }: DashboardProps) {
+export function Dashboard({ records, onEdit, highlightedRecordId }: DashboardProps) {
   const { toast } = useToast();
   const [selectedImageUrl, setSelectedImageUrl] = React.useState<string | null>(null);
   const [recordToDelete, setRecordToDelete] = React.useState<ExpenseWithId | null>(null);
@@ -135,12 +136,29 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
   const handleDelete = async () => {
     if (recordToDelete) {
       try {
-        await deleteDoc(doc(db, 'expenses', recordToDelete.id));
+        await runTransaction(db, async (transaction) => {
+          const counterRef = doc(db, 'counters', 'expenses');
+          const expenseRef = doc(db, 'expenses', recordToDelete.id);
+          
+          const counterDoc = await transaction.get(counterRef);
+          if (!counterDoc.exists()) {
+            throw "Counter document does not exist!";
+          }
+
+          transaction.delete(expenseRef);
+
+          const lastId = counterDoc.data().lastId;
+          if (recordToDelete.displayId === lastId) {
+            transaction.update(counterRef, { lastId: lastId - 1 });
+          }
+        });
+
         toast({
           title: 'Record Deleted',
           description: 'The expense record has been successfully deleted.',
         });
       } catch (error) {
+        console.error("Error deleting document: ", error);
         toast({
           variant: 'destructive',
           title: 'Delete Failed',
@@ -204,7 +222,7 @@ export function Dashboard({ records, onEdit }: DashboardProps) {
                 </TableHeader>
                 <TableBody>
                   {records.map((record) => (
-                    <TableRow key={record.id}>
+                    <TableRow key={record.id} className={highlightedRecordId === record.id ? 'bg-green-100' : ''}>
                       <TableCell>{record.displayId}</TableCell>
                       <TableCell>{record.groupName}</TableCell><TableCell>{record.bankType}</TableCell><TableCell>{record.township}</TableCell><TableCell>{record.bankAccountNumber}</TableCell><TableCell>{record.nrcNumber}</TableCell><TableCell>{record.name}</TableCell>
                       <TableCell>{formatNumber(record.collectedAmount)}</TableCell>
