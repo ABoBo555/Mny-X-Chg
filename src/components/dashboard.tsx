@@ -110,11 +110,11 @@ export function Dashboard({ records, onEdit, highlightedRecordId }: DashboardPro
       'NRC Number': record.nrcNumber,
       'Name': record.name,
       'Phone Number': record.phoneNumber,
-      'Collected Amount': record.collectedAmount,
+      'RM Collected Amount': record.collectedAmount,
       'RM Service Fee': record.rmServiceFee,
       'RM Total Amount': record.rmTotalAmount,
       'Buying Rate': record.buyingRate,
-      'Total MMK Transfer': record.totalMmkTransferAmount,
+      'MMK Transfer Amount': record.totalMmkTransferAmount,
       'MMK Service Fee': record.mmkServiceFee,
       'MMK Total Amount': record.mmkTotalAmount,
       'Remark': record.remark,
@@ -217,7 +217,7 @@ export function Dashboard({ records, onEdit, highlightedRecordId }: DashboardPro
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead><TableHead>Group</TableHead><TableHead>Bank</TableHead><TableHead>Township</TableHead><TableHead>Account No.</TableHead><TableHead>NRC</TableHead><TableHead>Name</TableHead><TableHead>Amount</TableHead><TableHead>RM Service Fee</TableHead><TableHead>RM Total Amount</TableHead><TableHead>Rate</TableHead><TableHead>Total MMK</TableHead><TableHead>Service Fee</TableHead><TableHead>Total w/ Fee</TableHead><TableHead>Remark</TableHead><TableHead>Images</TableHead><TableHead>Actions</TableHead>
+                    <TableHead>ID</TableHead><TableHead>Group</TableHead><TableHead>Bank</TableHead><TableHead>Township</TableHead><TableHead>Account No.</TableHead><TableHead>NRC</TableHead><TableHead>Name</TableHead><TableHead>RM Collected Amount</TableHead><TableHead>RM Service Fee</TableHead><TableHead>RM Total Amount</TableHead><TableHead>Buying Rate</TableHead><TableHead>MMK Transfer Amount</TableHead><TableHead>MMK Service Fee</TableHead><TableHead>MMK Total Amount</TableHead><TableHead>Remark</TableHead><TableHead>Images</TableHead><TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

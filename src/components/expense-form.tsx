@@ -321,11 +321,11 @@ function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) 
               <FormField control={form.control} name="nrcNumber" render={({ field }) => ( <FormItem> <FormLabel>NRC Number</FormLabel> <FormControl><Input placeholder="Enter NRC Number" {...field} value={field.value || ''} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="name" render={({ field }) => ( <FormItem> <FormLabel>Name</FormLabel> <FormControl><Input placeholder="Enter Name" {...field} value={field.value || ''} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="phoneNumber" render={({ field }) => ( <FormItem> <FormLabel>Phone Number</FormLabel> <FormControl><Input placeholder="Enter Phone Number" {...field} value={field.value || ''} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
-              <FormField control={form.control} name="collectedAmount" render={({ field }) => ( <FormItem> <FormLabel>Collected Amount <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="collectedAmount" render={({ field }) => ( <FormItem> <FormLabel>RM Collected Amount <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="rmServiceFee" render={({ field }) => ( <FormItem> <FormLabel>RM Service Fee</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="rmTotalAmount" render={({ field }) => ( <FormItem> <FormLabel>RM Total Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} disabled value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
               <FormField control={form.control} name="buyingRate" render={({ field }) => ( <FormItem> <FormLabel>Buying Rate <span className="text-red-500">*</span></FormLabel> <FormControl><Input type="number" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(parseFloat(e.target.value) || undefined)} disabled={isSubmitting} /></FormControl> <FormMessage /> </FormItem> )}/>
-              <FormField control={form.control} name="totalMmkTransferAmount" render={({ field }) => ( <FormItem> <FormLabel>Total MMK Transfer Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} disabled value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
+              <FormField control={form.control} name="totalMmkTransferAmount" render={({ field }) => ( <FormItem> <FormLabel>MMK Transfer Amount</FormLabel> <FormControl><Input type="number" placeholder="0" {...field} disabled value={field.value || ''} /></FormControl> <FormMessage /> </FormItem> )}/>
 
               {expenseToEdit && (
                 <>
@@ -396,15 +396,15 @@ function ExpenseFormContent({ onSaveSuccess, expenseToEdit }: ExpenseFormProps) 
                                   <div className="font-semibold text-right">NRC Number:</div>                  <div>{watch('nrcNumber')}</div>
                                   <div className="font-semibold text-right">Name:</div>                        <div>{watch('name')}</div>
                                   <div className="font-semibold text-right">Phone Number:</div>                <div>{watch('phoneNumber')}</div>
-                                  <div className="font-semibold text-right">Collected Amount:</div>            <strong>{formatNumber(watch('collectedAmount'))}</strong>
+                                  <div className="font-semibold text-right">RM Collected Amount:</div>         <strong>{formatNumber(watch('collectedAmount'))}</strong>
                                   <div className="font-semibold text-right">RM Service Fee:</div>              <strong>{formatNumber(watch('rmServiceFee'))}</strong>
                                   <div className="font-semibold text-right">RM Total Amount:</div>             <strong>{formatNumber(watch('rmTotalAmount'))}</strong>
                                   <div className="font-semibold text-right">Buying Rate:</div>                 <strong>{formatNumber(watch('buyingRate'))}</strong>
-                                  <div className="font-semibold text-right">Total MMK Amount:</div>            <strong>{formatNumber(watch('totalMmkTransferAmount'))}</strong>
+                                  <div className="font-semibold text-right">MMK Transfer Amount:</div>         <strong>{formatNumber(watch('totalMmkTransferAmount'))}</strong>
                                   {expenseToEdit && (
                                     <>
                                       <div className="font-semibold text-right">MMK Service Fee:</div> <strong>{formatNumber(watch('mmkServiceFee'))}</strong>
-                                      <div className="font-semibold text-right">Total MMK w/ Fee:</div> <strong>{formatNumber(watch('mmkTotalAmount'))}</strong>
+                                      <div className="font-semibold text-right">MMK Total Amount:</div> <strong>{formatNumber(watch('mmkTotalAmount'))}</strong>
                                     </>
                                   )}
                                   {watch('remark') && <>
