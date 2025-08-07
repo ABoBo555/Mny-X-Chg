@@ -3,8 +3,9 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
+
 const firebaseConfig = {
-  apiKey: "AIzaSyD5xQpcRU77o8hrM21QUixzQnCTh22sxQM",
+  apiKey: "Your-Google-API-Key", //replace your api key here
   authDomain: "expense-tracker-732dd.firebaseapp.com",
   projectId: "expense-tracker-732dd",
   storageBucket: "expense-tracker-732dd.appspot.com",
